@@ -953,6 +953,18 @@ class Connection(BaseConnection):
                     self._secure = True
                     if DEBUG:
                         print('connected using unix_socket')
+                elif self.driver in ['ws', 'wss']:
+                    from . import wasm
+                    sock = wasm.WasmSocket(
+                        host=self.host, port=self.port, user=self.user,
+                        password=self.password, driver=self.driver,
+                    )
+                    sock.settimeout(self.connect_timeout)
+                    sock.connect()
+                    self.host_info = 'wasmsocket %s:%d' % (self.host, self.port)
+                    self._secure = True
+                    if DEBUG:
+                        print('conected using wasm socket')
                 else:
                     kwargs = {}
                     if self.bind_address is not None:

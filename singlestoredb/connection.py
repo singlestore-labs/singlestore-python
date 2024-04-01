@@ -1419,7 +1419,7 @@ def connect(
     params = build_params(**dict(locals()))
     driver = params.get('driver', 'mysql')
 
-    if not driver or driver == 'mysql':
+    if not driver or driver in ['mysql', 'ws', 'wss']:
         from .mysql.connection import Connection  # type: ignore
         return Connection(**params)
 
