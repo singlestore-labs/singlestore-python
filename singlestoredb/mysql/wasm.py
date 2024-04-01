@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import io
 import sys
-import urllib.parse
 from typing import Any
 
 try:
