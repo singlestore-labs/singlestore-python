@@ -64,6 +64,6 @@ jobs:
       - name: Archive source dist and wheel
         uses: actions/upload-artifact@v3
         with:
-          name: artifacts
-          path: dist
+          name: singlestoredb-1.0.2-py3-none-any.whl
+          path: dist/singlestoredb-1.0.2-py3-none-any.whl
           retention-days: 2
