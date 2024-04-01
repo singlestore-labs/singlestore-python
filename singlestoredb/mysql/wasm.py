@@ -21,20 +21,10 @@ class WasmSocket(object):
         driver = kwargs.get('driver', 'wss')
         host = kwargs.get('host', 'localhost')
         port = int(kwargs.get('port', 443))
-        user = urllib.parse.quote_plus(kwargs.get('user', '')) or None
-        password = urllib.parse.quote_plus(kwargs.get('password', '')) or None
 
-        userpass = ''
-        if user and password:
-            userpass = f'{user}:{password}@'
-        elif user:
-            userpass = f'{user}:@'
-        elif password:
-            userpass = f':{password}@'
+        self._uri = f'{driver}://{host}:{port}/proxy'
 
-        self._uri = f'{driver}://{userpass}{host}:{port}/proxy'
-
-        self._debug = kwargs.get('debug', False)
+        self._debug = True
         self._jssocket = None
         self._incoming: asyncio.Queue[Any] = asyncio.Queue()
         self._errors: asyncio.Queue[Any] = asyncio.Queue()
@@ -128,11 +118,11 @@ class WasmSocket(object):
     async def _message_handler(self, event: Any) -> None:
         """Event handler for messages."""
         if self._debug:
-            js.console.log(f'[s2db msg] {event.data}')
+            js.console.log(f'[s2db msg] {event.data.to_py()}')
         await self._incoming.put(event.data.to_bytes())
 
     async def _error_handler(self, event: Any) -> None:
         """Event handler for errors."""
         if self._debug:
-            js.console.log(f'[s2db error] {event}')
+            js.console.log(f'[s2db error] {vars(event.to_py())}')
         await self._errors.put(event.to_py())

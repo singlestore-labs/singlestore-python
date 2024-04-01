@@ -315,6 +315,9 @@ class Connection(BaseConnection):
     ):
         BaseConnection.__init__(**dict(locals()))
 
+        if driver:
+            self.driver = driver
+
         if db is not None and database is None:
             # We will raise warning in 2022 or later.
             # See https://github.com/PyMySQL/PyMySQL/issues/939
@@ -956,8 +959,7 @@ class Connection(BaseConnection):
                 elif self.driver in ['ws', 'wss']:
                     from . import wasm
                     sock = wasm.WasmSocket(
-                        host=self.host, port=self.port, user=self.user,
-                        password=self.password, driver=self.driver,
+                        host=self.host, port=self.port, driver=self.driver,
                     )
                     sock.settimeout(self.connect_timeout)
                     sock.connect()
