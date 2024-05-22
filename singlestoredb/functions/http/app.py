@@ -104,16 +104,8 @@ def patch(path: str, **kwargs: Any) -> Callable[..., Any]:
     return decorate
 
 
-__all__ = ['get', 'put', 'post', 'patch', 'delete']
-
-
-def main(argv: Optional[List[str]] = None) -> None:
-    """Run the HTTP server."""
-    try:
-        import uvicorn
-    except ImportError:
-        raise ImportError('the uvicorn package is required to run this command')
-
+def create_app(*args: Any, **kwargs: Any) -> Any:
+    """Create a FastAPI application with exported endpoints."""
     try:
         import fastapi
     except ImportError:
@@ -134,10 +126,23 @@ def main(argv: Optional[List[str]] = None) -> None:
         # Apply the function to the FastAPI app
         getattr(app, attrs['method'])(*attrs['args'], **attrs['kwargs'])(v)
 
+    return app
+
+
+__all__ = ['get', 'put', 'post', 'patch', 'delete', 'create_app']
+
+
+def main(argv: Optional[List[str]] = None) -> None:
+    """Run the HTTP server."""
+    try:
+        import uvicorn
+    except ImportError:
+        raise ImportError('the uvicorn package is required to run this command')
+
     asyncio.create_task(
         _run_uvicorn(
             uvicorn,
-            app,
+            create_app(),
             dict(host='0.0.0.0', port=9010),
         ),
     )
