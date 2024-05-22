@@ -127,7 +127,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     for v in list(vars(__main__).values()):
 
         # See if this is an exported endpoint
-        attrs = getattr(v, '_singlestoredb_http_attrs')
+        attrs = getattr(v, '_singlestoredb_http_attrs', None)
         if attrs is None:
             continue
 
@@ -138,7 +138,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         _run_uvicorn(
             uvicorn,
             app,
-            dict(host='0.0.0.0', port='9010'),
+            dict(host='0.0.0.0', port=9010),
         ),
     )
 
