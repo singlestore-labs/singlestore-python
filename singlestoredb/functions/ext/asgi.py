@@ -61,6 +61,7 @@ from ...config import get_option
 from ...mysql.constants import FIELD_TYPE as ft
 from ..signature import get_signature
 from ..signature import signature_to_sql
+from ..utils import get_logger
 
 try:
     import cloudpickle
@@ -69,7 +70,7 @@ except ImportError:
     has_cloudpickle = False
 
 
-logger = utils.get_logger('singlestoredb.functions.ext.asgi')
+logger = get_logger('singlestoredb.functions.ext.asgi')
 
 
 # If a number of processes is specified, create a pool of workers

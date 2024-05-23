@@ -64,9 +64,10 @@ from . import asgi
 from . import utils
 from ... import manage_workspaces
 from ...config import get_option
+from ..utils import get_logger
 
 
-logger = utils.get_logger('singlestoredb.functions.ext.mmap')
+logger = get_logger('singlestoredb.functions.ext.mmap')
 
 
 def _handle_request(app: Any, connection: Any, client_address: Any) -> None:

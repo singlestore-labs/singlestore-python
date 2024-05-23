@@ -1,4 +1,5 @@
 build
+makefun
 parsimonious
 PyJWT
 requests

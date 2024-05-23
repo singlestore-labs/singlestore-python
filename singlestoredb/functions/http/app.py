@@ -1,116 +1,66 @@
 #!/usr/bin/env python
 import asyncio
 import functools
-import logging
+import inspect
 import sys
-from copy import copy
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
 
+from makefun import with_signature
+
 try:
-    from uvicorn.logging import DefaultFormatter
-
+    import fastapi
 except ImportError:
+    raise ImportError('the fastapi package is required to use this module')
 
-    class DefaultFormatter(logging.Formatter):  # type: ignore
-
-        def formatMessage(self, record: logging.LogRecord) -> str:
-            recordcopy = copy(record)
-            levelname = recordcopy.levelname
-            seperator = ' ' * (8 - len(recordcopy.levelname))
-            recordcopy.__dict__['levelprefix'] = levelname + ':' + seperator
-            return super().formatMessage(recordcopy)
-
-
-def get_logger(name: str) -> logging.Logger:
-    """Return a new logger."""
-    logger = logging.getLogger(name)
-    handler = logging.StreamHandler()
-    formatter = DefaultFormatter('%(levelprefix)s %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    return logger
+from ..utils import get_logger
 
 
 logger = get_logger('singlestoredb.functions.http.app')
 
 
-def post(path: str, **kwargs: Any) -> Callable[..., Any]:
-    """Configure a POST endpoint."""
-    attrs = dict(method='post', args=[path], kwargs=kwargs)
+def export_fastapi(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap a FastAPI method into a standalone decorator."""
 
-    def decorate(func: Callable[..., Any]) -> Callable[..., Any]:
-        def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-            return func(*args, **kwargs)  # type: ignore
-        wrapper._singlestoredb_http_attrs = attrs  # type: ignore
-        return functools.wraps(func)(wrapper)
+    name = func.__name__
 
-    return decorate
+    # Wrapper that acts like original function
+    def meth(*args: Any, **kwargs: Any) -> Callable[..., Any]:
+        attrs = dict(method=name, args=tuple(args), kwargs=kwargs)
 
+        # Add original function parameters to a decorated function
+        def decorate(func: Callable[..., Any]) -> Callable[..., Any]:
 
-def get(path: str, **kwargs: Any) -> Callable[..., Any]:
-    """Configure a GET endpoint."""
-    attrs = dict(method='get', args=[path], kwargs=kwargs)
+            # Return the final callable
+            def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
+                return func(*args, **kwargs)  # type: ignore
 
-    def decorate(func: Callable[..., Any]) -> Callable[..., Any]:
-        def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-            return func(*args, **kwargs)  # type: ignore
-        wrapper._singlestoredb_http_attrs = attrs  # type: ignore
-        return functools.wraps(func)(wrapper)
+            wrapper._singlestoredb_http_attrs = attrs  # type: ignore
+            return functools.wraps(func)(wrapper)
 
-    return decorate
+        return decorate
 
+    # Remove `self` parameter from signature
+    sig = inspect.signature(func)
+    sig = sig.replace(parameters=tuple(sig.parameters.values())[1:])
 
-def put(path: str, **kwargs: Any) -> Callable[..., Any]:
-    """Configure a PUT endpoint."""
-    attrs = dict(method='put', args=[path], kwargs=kwargs)
-
-    def decorate(func: Callable[..., Any]) -> Callable[..., Any]:
-        def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-            return func(*args, **kwargs)  # type: ignore
-        wrapper._singlestoredb_http_attrs = attrs  # type: ignore
-        return functools.wraps(func)(wrapper)
-
-    return decorate
+    return with_signature(sig, func_name=name)(meth)
 
 
-def delete(path: str, **kwargs: Any) -> Callable[..., Any]:
-    """Configure a DELETE endpoint."""
-    attrs = dict(method='delete', args=[path], kwargs=kwargs)
-
-    def decorate(func: Callable[..., Any]) -> Callable[..., Any]:
-        def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-            return func(*args, **kwargs)  # type: ignore
-        wrapper._singlestoredb_http_attrs = attrs  # type: ignore
-        return functools.wraps(func)(wrapper)
-
-    return decorate
-
-
-def patch(path: str, **kwargs: Any) -> Callable[..., Any]:
-    """Configure a PATCH endpoint."""
-    attrs = dict(method='patch', args=[path], kwargs=kwargs)
-
-    def decorate(func: Callable[..., Any]) -> Callable[..., Any]:
-        def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-            return func(*args, **kwargs)  # type: ignore
-        wrapper._singlestoredb_http_attrs = attrs  # type: ignore
-        return functools.wraps(func)(wrapper)
-
-    return decorate
+get = export_fastapi(fastapi.FastAPI.get)
+put = export_fastapi(fastapi.FastAPI.put)
+post = export_fastapi(fastapi.FastAPI.post)
+delete = export_fastapi(fastapi.FastAPI.delete)
+patch = export_fastapi(fastapi.FastAPI.patch)
+options = export_fastapi(fastapi.FastAPI.options)
+head = export_fastapi(fastapi.FastAPI.head)
 
 
 def create_app(*args: Any, **kwargs: Any) -> Any:
     """Create a FastAPI application with exported endpoints."""
-    try:
-        import fastapi
-    except ImportError:
-        raise ImportError('the fastapi package is required to run this command')
-
     # Namespace for notebook functions
     import __main__
 
@@ -129,7 +79,7 @@ def create_app(*args: Any, **kwargs: Any) -> Any:
     return app
 
 
-__all__ = ['get', 'put', 'post', 'patch', 'delete', 'create_app']
+__all__ = ['get', 'put', 'post', 'patch', 'delete', 'options', 'head', 'create_app']
 
 
 def main(argv: Optional[List[str]] = None) -> None:
