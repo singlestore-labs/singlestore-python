@@ -57,6 +57,7 @@ delete = export_fastapi(fastapi.FastAPI.delete)
 patch = export_fastapi(fastapi.FastAPI.patch)
 options = export_fastapi(fastapi.FastAPI.options)
 head = export_fastapi(fastapi.FastAPI.head)
+trace = export_fastapi(fastapi.FastAPI.trace)
 
 
 def create_app(*args: Any, **kwargs: Any) -> Any:
