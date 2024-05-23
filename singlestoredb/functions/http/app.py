@@ -80,7 +80,9 @@ def create_app(*args: Any, **kwargs: Any) -> Any:
     return app
 
 
-__all__ = ['get', 'put', 'post', 'patch', 'delete', 'options', 'head', 'create_app']
+__all__ = [
+    'get', 'put', 'post', 'patch', 'delete', 'options', 'head', 'trace', 'create_app',
+]
 
 
 def main(argv: Optional[List[str]] = None) -> None:
