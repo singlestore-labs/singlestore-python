@@ -3,6 +3,7 @@
 # http://dev.mysql.com/doc/internals/en/client-server-protocol.html
 # Error codes:
 # https://dev.mysql.com/doc/refman/5.5/en/error-handling.html
+import datetime
 import errno
 import functools
 import io
@@ -11,6 +12,7 @@ import queue
 import socket
 import struct
 import sys
+import tempfile
 import traceback
 import warnings
 from typing import Iterable
@@ -399,6 +401,66 @@ class Connection(BaseConnection):
                     if value:
                         ssl[key] = value
 
+        # Create a trial session
+        if host and host == 'shell.singlestore.com':
+            import atexit
+            import requests
+
+            sess_env = '__SINGLESTOREDB_VIRTUAL_SESSION__'
+
+            cookies = {}
+            terminate = True
+
+            if sess_env in os.environ:
+                cookies['userSessionID'] = os.environ[sess_env]
+                terminate = False
+
+            r = requests.get(
+                'https://shell.singlestore.com/api/session',
+                cookies=cookies,
+            )
+
+            cookies = r.cookies.get_dict()
+            if 'userSessionID' in cookies:
+                os.environ[sess_env] = cookies['userSessionID']
+
+                if terminate:
+
+                    def cleanup_session():
+                        requests.get(
+                            'https://shell.singlestore.com/api/terminate',
+                            cookies=cookies,
+                        )
+
+                    atexit.register(cleanup_session)
+
+            d = r.json()
+            host = d['endpoint']
+            port = 3333  # int(d['port'])
+            user = d['user']
+            password = d['password']
+            database = d['databaseName']
+            workspace_id = d['workspaceID']
+
+            expires = datetime.datetime.now() + datetime.timedelta(hours=1)
+            expires_s = expires.strftime('%a, %d %b %Y %H:%M:%S')
+
+            self._virtual_session_save_html = f'''
+            <!DOCTYPE html>
+            <html lang="en-US">
+            <head>
+            <script>
+                document.cookie = 'shellId={workspace_id}; expires={expires_s}; domain=.singlestore.com; path=/';
+                window.location.replace('https://portal.singlestore.com');
+            </script>
+            </head>
+            <body></body>
+            </html>
+            '''  # noqa: E501
+
+        else:
+            self._virtual_session_save_html = ''
+
         self.ssl = False
         if not ssl_disabled:
             if ssl_ca or ssl_cert or ssl_key or ssl_cipher or \
@@ -627,6 +689,27 @@ class Connection(BaseConnection):
     def messages(self):
         # TODO
         []
+
+    def save_session(self):
+        if not self._virtual_session_save_html:
+            raise RuntimeError('current session is not a virtual session')
+
+        import time
+        import threading
+        import webbrowser
+
+        def open_html():
+            with tempfile.TemporaryDirectory() as tmp:
+                path = os.path.join(tmp, 'index.html')
+                with open(path, 'w') as index:
+                    index.write(self._virtual_session_save_html)
+
+                webbrowser.open(f'file://{path}')
+
+                # Give time for browser to open the file
+                time.sleep(30)
+
+        threading.Thread(target=open_html).start()
 
     def __enter__(self):
         return self
