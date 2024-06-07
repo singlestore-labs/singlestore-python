@@ -65,7 +65,7 @@ def create_app(*args: Any, **kwargs: Any) -> Any:
     # Namespace for notebook functions
     import __main__
 
-    app = fastapi.FastAPI()
+    app = fastapi.FastAPI(*args, **kwargs)
 
     for v in list(vars(__main__).values()):
 
