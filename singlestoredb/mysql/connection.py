@@ -23,7 +23,6 @@ except (ImportError, ModuleNotFoundError):
     _singlestoredb_accel = None
 
 from . import _auth
-from .. import utils
 
 from .charset import charset_by_name, charset_by_id
 from .constants import CLIENT, COMMAND, CR, ER, FIELD_TYPE, SERVER_STATUS
@@ -72,6 +71,7 @@ from ..config import get_option
 from .. import fusion
 from .. import connection
 from ..connection import Connection as BaseConnection
+from ..utils import events
 from ..utils.debug import log_query
 
 try:
@@ -621,7 +621,7 @@ class Connection(BaseConnection):
         self._track_env = bool(track_env) or self.host == 'singlestore.com'
         self._enable_extended_data_types = enable_extended_data_types
         self._connection_info = {}
-        utils.subscribe(self._handle_event)
+        events.subscribe(self._handle_event)
 
         if defer_connect or self._track_env:
             self._sock = None
