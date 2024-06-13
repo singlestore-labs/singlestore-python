@@ -13,8 +13,6 @@ import struct
 import sys
 import traceback
 import warnings
-from typing import Any
-from typing import Dict
 from typing import Iterable
 
 try:
@@ -71,7 +69,6 @@ from ..config import get_option
 from .. import fusion
 from .. import connection
 from ..connection import Connection as BaseConnection
-from ..utils import events
 from ..utils.debug import log_query
 
 try:
@@ -621,16 +618,11 @@ class Connection(BaseConnection):
         self._track_env = bool(track_env) or self.host == 'singlestore.com'
         self._enable_extended_data_types = enable_extended_data_types
         self._connection_info = {}
-        events.subscribe(self._handle_event)
 
         if defer_connect or self._track_env:
             self._sock = None
         else:
             self.connect()
-
-    def _handle_event(self, data: Dict[str, Any]) -> None:
-        if data.get('name', '') == 'singlestore.portal.connection_updated':
-            self._connection_info = dict(data)
 
     @property
     def messages(self):
