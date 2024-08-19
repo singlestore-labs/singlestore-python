@@ -13,6 +13,7 @@ from multiprocessing import Semaphore
 from typing import Any
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 
 from IPython.core.magic import register_line_cell_magic
@@ -180,7 +181,6 @@ def _use_env(
         upgrade=False,
         with_pip=True,
         prompt=None,
-        upgrade_deps=False,
     )
 
     builder.create(pyenv)
@@ -315,7 +315,7 @@ def compare_req(req_a: Requirement, req_b: Requirement) -> bool:
     return False
 
 
-def compare_req_list(reqs_a: set[Requirement], reqs_b: set[Requirement]) -> bool:
+def compare_req_list(reqs_a: Set[Requirement], reqs_b: Set[Requirement]) -> bool:
     """Compeare sets of requirements to see if they match."""
     if len(reqs_a) != len(reqs_b):
         return False
