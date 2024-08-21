@@ -10,6 +10,7 @@ import uuid
 import venv
 from multiprocessing import Process
 from multiprocessing import Semaphore
+from pathlib import Path
 from typing import Any
 from typing import List
 from typing import Optional
@@ -20,10 +21,10 @@ from IPython.core.magic import register_line_cell_magic
 from IPython.core.magic import register_line_magic
 from packaging.requirements import Requirement
 
-from ..management import workspace
+from singlestoredb.management import workspace
 
-LOCAL_ENV_DIR = 'environment'
-OLD_LOCAL_ENV_DIR = '.old-environments'
+LOCAL_ENV_DIR = os.path.join(str(Path.home()), 'environment')
+OLD_LOCAL_ENV_DIR = os.path.join(str(Path.home()), '.old-environments')
 REMOTE_ENV_DIR = 'environments'
 UPLOAD_RETRIES = 3
 DOWNLOAD_RETRIES = 3
@@ -82,29 +83,28 @@ def _download_env_chunk(
 
 def _env_from_stage(name: str, verbose: bool = False) -> None:
     """Install an env from Stage."""
-    pyenv = os.path.join(os.getcwd(), LOCAL_ENV_DIR)
-    env_dir = f'{REMOTE_ENV_DIR}/{name}/'
+    remote_env = f'{REMOTE_ENV_DIR}/{name}/'
 
-    if os.path.exists(pyenv):
-        shutil.move(pyenv, f'{OLD_LOCAL_ENV_DIR}/{str(uuid.uuid4())}')
+    if os.path.exists(LOCAL_ENV_DIR):
+        shutil.move(LOCAL_ENV_DIR, f'{OLD_LOCAL_ENV_DIR}/{str(uuid.uuid4())}')
 
-    os.makedirs(pyenv, exist_ok=True)
+    os.makedirs(LOCAL_ENV_DIR, exist_ok=True)
 
     print('Loading environment from stage...')
 
     # Create directory structure
     with tempfile.TemporaryDirectory() as tmp:
         workspace.get_stage().download_file(
-            f'{env_dir}dirs.tar',
+            f'{remote_env}dirs.tar',
             f'{tmp}/dirs.tar',
             overwrite=True,
         )
-        tarfile.open(f'{tmp}/dirs.tar', 'r').extractall(env_dir)
+        tarfile.open(f'{tmp}/dirs.tar', 'r').extractall(LOCAL_ENV_DIR)
 
     # Load each file from manifest
     manifest = str(
         workspace.get_stage().download_file(
-            f'{env_dir}manifest.txt',
+            f'{remote_env}manifest.txt',
             encoding='utf-8',
         ) or '',
     )
@@ -114,7 +114,7 @@ def _env_from_stage(name: str, verbose: bool = False) -> None:
     for chunk_name in [x.strip() for x in manifest.split('\n') if x.strip()]:
         p = Process(
             target=_download_env_chunk,
-            args=(f'{env_dir}{chunk_name}', pyenv, semaphore),
+            args=(f'{remote_env}{chunk_name}', LOCAL_ENV_DIR, semaphore),
         )
         p.start()
         processes.append(p)
@@ -146,24 +146,23 @@ def _use_env(
     if not name:
         raise ValueError('name is empty')
 
-    pyenv = os.path.join(os.getcwd(), LOCAL_ENV_DIR)
     verb = ['-v'] if verbose else []
 
     # Add env to Python path
     version = f'python{sys.version_info.major}.{sys.version_info.minor}'
-    site_packages = os.path.join(pyenv, 'lib', version, 'site-packages')
+    site_packages = os.path.join(LOCAL_ENV_DIR, 'lib', version, 'site-packages')
     if sys.path[0] != site_packages:
-        sys.path.insert(0, site_packages)
+        sys.path = [site_packages] + sys.path
 
     # Add env bin to system path
     path = os.environ['PATH'].split(':')
-    if path[0] != f'{pyenv}/bin':
-        os.environ['PATH'] = f'{pyenv}/bin:{os.environ["PATH"]}'
+    if path[0] != f'{LOCAL_ENV_DIR}/bin':
+        os.environ['PATH'] = f'{LOCAL_ENV_DIR}/bin:{os.environ["PATH"]}'
 
-    env_dir = f'{REMOTE_ENV_DIR}/{name}/'
+    remote_env = f'{REMOTE_ENV_DIR}/{name}/'
 
     # If environment exists in stage, use it
-    if not force_reinstall and workspace.get_stage().exists(env_dir):
+    if not force_reinstall and workspace.get_stage().exists(remote_env):
         return _env_from_stage(name, verbose)
 
     if not packages:
@@ -171,8 +170,8 @@ def _use_env(
 
     print('Creating new environment...')
 
-    if os.path.exists(pyenv):
-        os.rename(pyenv, f'{OLD_LOCAL_ENV_DIR}/{str(uuid.uuid4())}')
+    if os.path.exists(LOCAL_ENV_DIR):
+        os.rename(LOCAL_ENV_DIR, f'{OLD_LOCAL_ENV_DIR}/{str(uuid.uuid4())}')
 
     builder = venv.EnvBuilder(
         system_site_packages=False,
@@ -183,7 +182,7 @@ def _use_env(
         prompt=None,
     )
 
-    builder.create(pyenv)
+    builder.create(LOCAL_ENV_DIR)
 
     if packages:
         rc = subprocess.call(['pip', 'install'] + verb + packages)
@@ -193,13 +192,13 @@ def _use_env(
     if not upload:
         return
 
-    if workspace.get_stage().exists(env_dir):
-        workspace.get_stage().removedirs(env_dir)
+    if workspace.get_stage().exists(remote_env):
+        workspace.get_stage().removedirs(remote_env)
 
     if not workspace.get_stage().exists(f'{REMOTE_ENV_DIR}/'):
         workspace.get_stage().mkdir(f'{REMOTE_ENV_DIR}/')
 
-    workspace.get_stage().mkdir(env_dir)
+    workspace.get_stage().mkdir(remote_env)
 
     # Upload env in chunks
     with tempfile.TemporaryDirectory() as tmp:
@@ -216,7 +215,7 @@ def _use_env(
         chunk_size = 0
 
         local_chunk = f'{tmp}/chunk{n}.tar'
-        remote_chunk = f'{env_dir}chunk{n}.tar'
+        remote_chunk = f'{remote_env}chunk{n}.tar'
 
         manifest.write(os.path.basename(remote_chunk) + '\n')
 
@@ -224,11 +223,15 @@ def _use_env(
 
         semaphore = Semaphore(MAX_UPLOAD_PROCS)
 
-        for root, dirs, files in os.walk(pyenv, followlinks=False):
+        for root, dirs, files in os.walk(LOCAL_ENV_DIR, followlinks=False):
 
             for d in dirs:
                 dpath = os.path.join(root, d)
-                dirs_tar.add(dpath, arcname=dpath[len(pyenv) + 1:], recursive=False)
+                dirs_tar.add(
+                    dpath,
+                    arcname=dpath[len(LOCAL_ENV_DIR) + 1:],
+                    recursive=False,
+                )
 
             for f in files:
                 fpath = os.path.join(root, f)
@@ -249,13 +252,13 @@ def _use_env(
                     n += 1
 
                     local_chunk = f'{tmp}/chunk{n}.tar'
-                    remote_chunk = f'{env_dir}chunk{n}.tar'
+                    remote_chunk = f'{remote_env}chunk{n}.tar'
 
                     manifest.write(os.path.basename(remote_chunk) + '\n')
                     chunk = tarfile.open(local_chunk, mode='w')
 
                 chunk_size += path_size
-                chunk.add(fpath, arcname=fpath[len(pyenv) + 1:], recursive=False)
+                chunk.add(fpath, arcname=fpath[len(LOCAL_ENV_DIR) + 1:], recursive=False)
 
         chunk.close()
 
@@ -268,17 +271,17 @@ def _use_env(
 
         workspace.get_stage().upload_file(
             f'{tmp}/requirements.txt',
-            stage_path=f'{env_dir}requirements.txt',
+            stage_path=f'{remote_env}requirements.txt',
             overwrite=True,
         )
         workspace.get_stage().upload_file(
             f'{tmp}/dirs.tar',
-            stage_path=f'{env_dir}dirs.tar',
+            stage_path=f'{remote_env}dirs.tar',
             overwrite=True,
         )
         workspace.get_stage().upload_file(
             f'{tmp}/manifest.txt',
-            stage_path=f'{env_dir}manifest.txt',
+            stage_path=f'{remote_env}manifest.txt',
             overwrite=True,
         )
 
