@@ -159,6 +159,8 @@ def make_func(
     data_format = attrs.get('data_format') or 'python'
     include_masks = attrs.get('include_masks', False)
     info: Dict[str, Any] = {}
+    sig = get_signature(func, name=name)
+    is_multi_valued = sig['returns']['dtype'].startswith('tuple[')
 
     if data_format == 'python':
         async def do_func(
@@ -188,8 +190,6 @@ def make_func(
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__
 
-    sig = get_signature(func, name=name)
-
     # Store signature for generating CREATE FUNCTION calls
     info['signature'] = sig
 
@@ -207,9 +207,18 @@ def make_func(
 
     # Setup return type
     dtype = sig['returns']['dtype'].replace('?', '')
-    if dtype not in rowdat_1_type_map:
-        raise TypeError(f'no data type mapping for {dtype}')
-    info['returns'] = [rowdat_1_type_map[dtype]]
+
+    if is_multi_valued:
+        dtype_list = dtype.split('[', 1)[1].split(']', 1)[0].split(',')
+    else:
+        dtype_list = [dtype]
+
+    ret = []
+    for dt in dtype_list:
+        if dt not in rowdat_1_type_map:
+            raise TypeError(f'no data type mapping for {dtype}')
+        ret.append(rowdat_1_type_map[dt])
+    info['returns'] = ret
 
     return do_func, info
 
